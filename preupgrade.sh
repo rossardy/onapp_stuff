@@ -43,6 +43,14 @@ function onapp_version()
     do
     printf "$format" " " $i
     done
+    features_grep
+    echo; echo
+    printf "%-25s %-25s\n" " " "${RED} ${BRIGHT} Features enabled: ${NORMAL}"
+    printf "%$width.${width}s\n" "$divider"
+    printf  "$format" $features
+    if [[ "$hvs_vmware" -gt 0 ]]
+    then printf  "$format" "vcloud_enabled:" "true"
+    fi
     hvs_dbselect
     echo; echo
     printf "%-25s %-25s\n" " " "${RED} ${BRIGHT} Hypervisors and Backup Servers ${NORMAL}"
@@ -52,15 +60,17 @@ function onapp_version()
     printf  "$format" "static XEN: " $hvs_static_xen
     printf  "$format" "cloudboot KVM: " $hvs_cboot_kvm
     printf  "$format" "cloudboot XEN: " $hvs_cboot_xen
-    printf  "$format" "VMware: " $hvs_vmware
+    #printf  "$format" "VMware: " $hvs_vmware
     printf  "$format" "Backup Servers: " $bs_all
     printf  "$format" "static BS: " $bs_static
     printf  "$format" "cloudboot BS: " $bs_cboot
+
+
 }
 
 function hvs_dbselect()
 {
-     if [ $old = 1 ]
+     if [[ $old -eq 1 ]]
      then
         #For version <=6.0
         dbselect='from hypervisors where ip_address is not NULL and '
@@ -89,6 +99,11 @@ function hvs_dbselect()
      bs_cboot=$(mysql -N -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select count(*) $dbselect host_id is not NULL and backup=1")
 }
 
+function features_grep()
+{
+features=$(cat /onapp/interface/config/on_app.yml | egrep "^cloud_boot_enabled:|^storage_enabled:|^draas_enabled:|^allow_connect_aws:|^ha_enabled:" | grep true)
+}
+
 ############# DATA BASE PART #######################
 
 dbph='/onapp/interface/config/database.yml';
@@ -99,4 +114,5 @@ dborder='ORDER BY hypervisor_group_id';
 
 header
 onapp_version
+
 
