@@ -219,6 +219,7 @@ dbph='/onapp/interface/config/database.yml';
 dbpass=$(cat $dbph |grep passw|awk '{print $2}'|head -1 |sed -e "s|^'||g; s|'$||g; s|^\x22||g; s|\x22$||g")
 dbname=$(cat $dbph |grep database|awk '{print $2}'|head -1)
 dbhost=$(cat $dbph |grep 'host:' |awk '{print $2}'|head -1)
+dbuser=$(cat $dbph |grep 'username:' |awk '{print $2}'|head -1)
 dbprefix='ip_address, host_id, mtu, hypervisor_group_id, label, backup '
 dborder='ORDER BY hypervisor_group_id';
 
@@ -454,15 +455,15 @@ filter=''; filter_1='';
 
 ###HV IPs###############
 
-hvs_ips=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter_1"|sed '1d')
+hvs_ips=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter_1"|sed '1d')
 [ -z "$hvs_ips" ] && HVslist='list' && no_info
 
-hvs_ips=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter_1 group by hypervisors.id"|sed '1d')
+hvs_ips=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter_1 group by hypervisors.id"|sed '1d')
 
 echo ; yellow 'HVS output: ' ; echo -n '  for i in ' ; ip_sort_fun "$hvs_ips" '4' ; echo '; do echo $i;  ssh $i uptime ; done'$'\n';
 
 ###Storage controllers IPs###############
-hvs_ips=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter"|sed '1d')
+hvs_ips=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address $dbselect and online=1 $filter"|sed '1d')
 
 st_vm_ips=$(for i in $hvs_ips; do curl --silent $i:8080/is/Node |ruby -rjson -e 'print JSON.pretty_generate(JSON.parse(STDIN.read))' 2> /dev/null |grep "ipaddr"|grep -v .254|sort|uniq|sed 's/"ipaddr"://g; s/[",]//g'; done)
 st_vm_ips=$(echo "$st_vm_ips"| tr ' ' '\n' | sort -u | tr '\n' ' ')
@@ -481,15 +482,14 @@ unset filter filter_1 hvs_ips st_vm_ips parsing final_range;
 ## part for vm/disk mode -- Begin
 if [[ $FLAGS =~ 'vm_mode' ]] ;                                                                                                           # take info of vdisis and target HV. -- vm mode.
     then \
-vm_mode_vdisks=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select d.identifier from disks d, data_stores ds
-  where virtual_machine_id IN (select id from virtual_machines where identifier='$VM_identifier') and d.data_store_id = ds.id and ds.identifier NOT LIKE 'onapp-%'"| sed '1d');
+vm_mode_vdisks=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select d.identifier from disks d, data_stores ds where virtual_machine_id IN (select id from virtual_machines where identifier='$VM_identifier') and d.data_store_id = ds.id and ds.identifier NOT LIKE 'onapp-%'"| sed '1d');
 
 [ -z "$vm_mode_vdisks" ] && yellow "there is no vm with identifier='$VM_identifier' in DB" && echo && exit 1 ;
-zoneIP=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address from hypervisors where id IN (select hypervisor_id from virtual_machines where identifier='$VM_identifier')" | sed '1d');
+zoneIP=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_address from hypervisors where id IN (select hypervisor_id from virtual_machines where identifier='$VM_identifier')" | sed '1d');
 FLAGS+="only";flag='disks'; fi;
-[ -n "$zoneIP" -a -z "$(echo $FLAGS|grep only)" ] && zone=$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select hypervisor_group_id from hypervisors where ip_address='$zoneIP' and mac <> '' and host_id is not NULL" | sed '1d') && \
+[ -n "$zoneIP" -a -z "$(echo $FLAGS|grep only)" ] && zone=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select hypervisor_group_id from hypervisors where ip_address='$zoneIP' and mac <> '' and host_id is not NULL" | sed '1d') && \
 checkopts zoneIP;
-[ "$flag" = 'disks' ] && dbhv_all="$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "$dbprefix" "$dbselect" | sed '1d')";
+[ "$flag" = 'disks' ] && dbhv_all="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$dbprefix" "$dbselect" | sed '1d')";
 
 if [ -z "$zone" ] ;
     then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and online=1  $dborder");
@@ -499,18 +499,20 @@ fi;
 if [[ $FLAGS =~ 'vm_mode' ]] ;                                                                                                           # print  info of vm/vdisks from DB
     then \
 echo ; echo "VM '$VM_identifier' info:" ;
-mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select v.id as vm_id, v.memory, v.built, v.locked, v.booted, v.state, v.deleted_at, t.id as template_id, t.file_name, t.parent_template_id from virtual_machines v, templates t where v.identifier='$VM_identifier' and v.template_id = t.id"
+mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select v.id as vm_id, v.memory, v.built, v.locked, v.booted, v.state, v.deleted_at, t.id as template_id, t.file_name, t.parent_template_id from virtual_machines v, templates t where v.identifier='$VM_identifier' and v.template_id = t.id"
 echo ; echo vdisks info: ;
-mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "select d.id, d.identifier, d.disk_vm_number, d.primary, d.disk_size, d.file_system, d.data_store_id, ds.identifier as ds_identifier, ds.hypervisor_group_id as hvs_zone from disks d, data_stores ds where virtual_machine_id IN (select id from virtual_machines where identifier='$VM_identifier') and d.data_store_id = ds.id"
+mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select d.id, d.identifier, d.disk_vm_number, d.primary, d.disk_size, d.file_system, d.data_store_id, ds.identifier as ds_identifier, ds.hypervisor_group_id as hvs_zone from disks d, data_stores ds where virtual_machine_id IN (select id from virtual_machines where identifier='$VM_identifier') and d.data_store_id = ds.id"
 fi;
 
 [[ $FLAGS =~ 'only' ]] && if [ "$flag" != 'disks' ] ;
-then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and ip_address='$zoneIP'") ;
-else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect ip_address='$zoneIP' ") ;
+#then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and ip_address='$zoneIP'") ;
+#else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect ip_address='$zoneIP' ") ;
+then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup from hypervisors where online=1 and mac  <> '' and host_id is not NULL and ip_address='$zoneIP' and host_id is not NULL or backup=1 and mac <> '' and online=1 and host_id is not NULL") ;
+else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup from hypervisors where online=1 and mac  <> '' and ip_address='$zoneIP' ") ;
 fi
 
-dbhv="$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "$DBSELECT" | sed '1d')";                                                              # data of hvs
-dbhvoff="$(mysql -u root -p"$dbpass" "$dbname" -h "$dbhost" -e "$(echo "$DBSELECT"| sed 's/ine=1/ine=0/g')"| sed '1d')";                           # Data of offline hvs (if zone - filter by zone)
+dbhv="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$DBSELECT" | sed '1d')";                                                              # data of hvs
+dbhvoff="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$(echo "$DBSELECT"| sed 's/ine=1/ine=0/g')"| sed '1d')";                           # Data of offline hvs (if zone - filter by zone)
 
 
 if [[ $FLAGS =~ 'only' ]] ; then [ -z "$(echo $dbhv $dbhvoff|grep -- "$zoneIP")" ] && no_info ;
