@@ -1153,9 +1153,9 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
           vdisk_storage=$(ssh $ssh_opt root@$node_ip_addr "ls /DB/NODE-$node/storage/$vdisk/storage 2>/dev/null") ;                                    # check storage file
           vdisk_xml_data=$(ssh $ssh_opt root@$node_ip_addr cat /DB/NODE-$node/vdisks/$vdisk.xml 2>/dev/null);                                          # check vdisk xml file and save data.
           vdisk_xml_syncstatus=$(echo $vdisk_xml_data|sed 's/>/>\n/g; s/</\n</g'| sed -n '/<syncstatus>/,/<\/syncstatus>/p'|sed '1d;$d'|grep -o '[0-9]\+')
-          echo -n "$node"'-'$node_ip_addr;                                                                                                             # print node|ip_of|node and another info
+          echo -n "$node"'-'$node_ip_addr;  echo $ssh_opt;                                                                                                            # print node|ip_of|node and another info
           echo -n ' '"$(echo "$vdisk_memberinfo"|grep -- "$node"|awk '{$1="";print}')";
-      if ssh $ssh_opt -q $node_ip_addr -l root exit  ; then \
+      if ssh $ssh_opt -q root@$node_ip_addr exit  ; then \
           if [ -n "$(echo $rspamd_pids|grep [0-9])" ] ; then echo -n " ($rspamd_pids)" ; else echo -n ' (no_rspamd)';  fi;                            # print rspamd pids processes which running on taget stvm
           if [ -n "$vdisk_socket" -o -n "$vdisk_storage" -o -n "$vdisk_xml_data" ] ; then \
             echo -n ' files:('
@@ -1163,7 +1163,7 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
             [ -n "$vdisk_storage" ] && echo -n 'storage,';
             [ -n "$vdisk_xml_data" ] && echo -n "xml[$vdisk_xml_syncstatus]";
             echo -n ')' ; else yellow ' no_files' ; fi |sed 's/,)/)/g' ;
-      else REDn ' no_connect_to_controller'; fi;
+      else REDn ' no_connect_to_controller' ; fi;
 
           [ "$state" != 'ACTIVE' ]  && yellow " $state" ;
           [ -z  "$vdisk_socket" -a  -n "$(echo $rspamd_pids|grep [0-9])" ] && REDn " no_socket!"
