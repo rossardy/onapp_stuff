@@ -720,7 +720,7 @@ function status_nodes_hv_print_fun() {
       else [ -n "$hv_stats" ] && RED 'No directory /tmp/NBDdevs/freedevs/ !' && free_devs_alart=$(printf '%-17b\t' "$free_devs_alart""\nHV:($hv)" 'No directory /tmp/NBDdevs/freedevs/');
    fi;
    if [ "$ISD" = 1 ] ; then \
-      [ -n "$hv_group" -o -n "$hv_redis" ] &&  REDn 'Found out groupmon or redis-server processes: ' && yellow $hv_group ';' $hv_redis && echo;    # error if running group on isd
+      [ -n "$hv_group" -o -n "$hv_redis" ] &&  redn 'Found out groupmon or redis-server processes: ' && yellow $hv_group ';' $hv_redis && echo;    # error if running group on isd
       [ -z "$hv_crond" ] && RED 'crond process is not running!';                                                                                   # red when no crond process on HV with isd
       [ -n "$hv_cron_tab_err" ] &&  RED 'Not default values or missing records in /etc/crontab for:' "$hv_cron_tab_err";                           # if not default values
       [ -n "$diskhot_errors" ] && RED "$diskhot_errors" ;
@@ -759,7 +759,7 @@ do if ssh -q $ssh_opt 10.200.$Hid.$T exit ;
          tel_xfs_err_all=$(echo "$stvm_info_all_ssh" |grep -i error|grep -v grep|sort -u);                                              # xfs errors from dmesg
          telinfo_df_all=$(echo "$stvm_info_all_ssh"|grep vd|grep NODE);                                                                   # take: df -h
       calculate_stvm_info "ssh" "$ISD" "$telinfo_node" "$hv" "$DBHV";
-    else REDn "Cant log in via ssh to" ; yellow " 10.200.$Hid.$T!" ; echo ;stvms="${stvms} $T";  fi;
+    else redn "Cant log in via ssh to" ; yellow " 10.200.$Hid.$T!" ; echo ;stvms="${stvms} $T";  fi;
 done ; [ -n "$stvms" ] && yellow "Will try via telnet. stvms:($stvms )" && echo;
 echo; echo "stvm_ssh_outputE";
 echo STVMSS $stvms;
@@ -855,14 +855,14 @@ $(echo "NO ACTIVE NODES! 10.200.$Hid.$T hv_zone=$(echo "$DBHV" | cut  -f 4)")"; 
                [ -n "$telinfo_df" ] && yellow ' '$telinfo_df;
                [ -n "$tel_ioerr" -o "$xfs_check" = 1 ] && tel_alarm='RED';
                [ "$tel_alarm" == yellow ] &&  yellow ' 'WARNING!;
-               [ "$tel_alarm" == RED ]    &&  REDn ' 'WARNING!;
-               [ -n "$(echo "$tel_dif_err" |grep 'result=FAILURE')" -a "$api_alarm" == 1 ] && REDn ' API-call failed! ';
-               [ "$ISD" = 1 ] && [ -n "$tel_group" -o -n "$tel_redis" ] && echo && REDn 'Found out groupmon or redis-server processes:' && yellow "$tel_group" ';' "$tel_redis" ;   # error if running group on isd
-               [ -n "$tel_locks" ] && echo && REDn '-Lock(s) file(s) which exist more then 3 minutes:' $tel_locks 'in /tmp/ directory';                                             # print hanged locks files.
+               [ "$tel_alarm" == RED ]    &&  redn ' 'WARNING!;
+               [ -n "$(echo "$tel_dif_err" |grep 'result=FAILURE')" -a "$api_alarm" == 1 ] && redn ' API-call failed! ';
+               [ "$ISD" = 1 ] && [ -n "$tel_group" -o -n "$tel_redis" ] && echo && redn 'Found out groupmon or redis-server processes:' && yellow "$tel_group" ';' "$tel_redis" ;   # error if running group on isd
+               [ -n "$tel_locks" ] && echo && redn '-Lock(s) file(s) which exist more then 3 minutes:' $tel_locks 'in /tmp/ directory';                                             # print hanged locks files.
                [ -n "$tel_txn_disks" ] && echo && yellow '-Lock(s) vdisk(s) file(s) which exist more then 3 minutes:' "$tel_txn_disks" ;
 
                if [ -n "$tel_ioerr" ] ;
-                  then  echo; REDn "$tel_ioerr" |sed 's/ls/ ls/g';
+                  then  echo; redn "$tel_ioerr" |sed 's/ls/ ls/g';
                         [ -n "$diskhot" ] && [ -z "$(echo tel_ioerr_report|grep $hv)" ] && tel_ioerr_report=$(echo -e "$tel_ioerr_report""\n"Diskhotplug list on $hv"\n""$diskhot");
                         tel_ioerr_nodes=$(echo "$tel_ioerr"|sed 's/ /\n/g'|grep NODE|cut -d '-' -f 2|sed 's/://g');
                         tel_ioerr_report=$(echo -e "$tel_ioerr_report""\n"--On HV: $hv 'storage vm:' 10.200.$Hid.$T "\n"'Corrupted disk(s) in storage vm:' $(echo "$telinfo_df_all"|grep -- "$tel_ioerr_nodes"|awk '{print $1}'|cut -d '/' -f 3));
@@ -900,12 +900,12 @@ $(echo "NO ACTIVE NODES! 10.200.$Hid.$T hv_zone=$(echo "$DBHV" | cut  -f 4)")"; 
 
                if [ -n "$tel_ioerr" -o "$xfs_check" = 1 ] ; then \
                   if [ -n "$tel_xfs_errs" ] ; then \
-                    echo ; REDn "$(echo "$tel_xfs_errs"|grep -v vd[a-z]|sort -u|grep -v '^$')" ; xfs_alarm=$(echo -e "$xfs_alarm""\n"'on HV:('$hv') in stvm:(10.200.'$Hid.$T') from dmesg:'"\n""$tel_xfs_errs"); fi;
+                    echo ; redn "$(echo "$tel_xfs_errs"|grep -v vd[a-z]|sort -u|grep -v '^$')" ; xfs_alarm=$(echo -e "$xfs_alarm""\n"'on HV:('$hv') in stvm:(10.200.'$Hid.$T') from dmesg:'"\n""$tel_xfs_errs"); fi;
                 xfs_count=0;
                [ -n "$tel_disk_xfs_err" ] && for xfs_disks in "$tel_disk_xfs_err" ;
                                                  do ((xfs_count++))
                                                     tel_node_xfs_err="$(echo "$telinfo_df_all" |grep "$xfs_disks" |sed "s/\r//g")"; [ -z "$tel_node_xfs_err" ] && tel_node_xfs_err="$(echo \[$xfs_disks'] -- not mounted inside stvm')";
-                                                    echo && REDn $(echo "$tel_xfs_err"|sed 's/at line/\n/g'|grep 'XFS\|/dev/') -- "$(echo "$tel_node_xfs_err"|sed 's/\r//g')";
+                                                    echo && redn $(echo "$tel_xfs_err"|sed 's/at line/\n/g'|grep 'XFS\|/dev/') -- "$(echo "$tel_node_xfs_err"|sed 's/\r//g')";
                           [ -n "$tel_xfs_err" ]  && xfs_alarm=$(echo -e "$xfs_alarm""\n" 'HV:('$hv') stvm:(10.200.'$Hid.$T') -- from dmesg:'"\n"$(echo "$tel_xfs_err"|sed 's/at line/\n/g'|grep 'XFS\|/dev/'));
                                                     xfs_alarm=$(echo -e "$xfs_alarm""\n" 'HV:('$hv') stvm:(10.200.'$Hid.$T') -- '$(echo "$tel_node_xfs_err"|sed 's/\r//g'));
                                                     unset tel_node_xfs_err;
@@ -1163,10 +1163,10 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
             [ -n "$vdisk_storage" ] && echo -n 'storage,';
             [ -n "$vdisk_xml_data" ] && echo -n "xml[$vdisk_xml_syncstatus]";
             echo -n ')' ; else yellow ' no_files' ; fi |sed 's/,)/)/g' ;
-      else REDn ' no_connect_to_controller' ; fi;
+      else redn ' no_connect_to_controller' ; fi;
 
           [ "$state" != 'ACTIVE' ]  && yellow " $state" ;
-          [ -z  "$vdisk_socket" -a  -n "$(echo $rspamd_pids|grep [0-9])" ] && REDn " no_socket!"
+          [ -z  "$vdisk_socket" -a  -n "$(echo $rspamd_pids|grep [0-9])" ] && redn " no_socket!"
           echo;
           unset state node_ip_addr rspamd_pids vdisk_storage vdisk_socket vdisk_xml_data vdisk_xml_syncstatus;
           done|sed 's/[ ]\+/\t/g; s/\(^[0-9]\{9\}\)-/\1 -/g; s/\(^[0-9]\{7\}\)-/\1   -/g; s/\(^[0-9]\{8\}\)-/\1  -/g ; s/-/|/g;s/\(status:[0-9]\)\t/\1   /g; s/\(\.[0-9]\.[0-9]]\)\t/\1\t\t/g ; s/\(seqno:0\)/\1\t/g; s/\(seqno:[0-9]\+[ ]\)/\1\t/g; s/L\t/L /g' # `readble printing` status of nodes
@@ -1182,11 +1182,11 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
     excessive_members=$(diff -r <(echo "$vdisk_membership_info"|grep 'members '| sed 's/ /\n/g;s/[a-z]\+//g'|sort) <(echo "$vdisk_membership_info"|grep 'membership'| sed 's/ /\n/g;s/[a-z]\+//g'|sort));
     if [ -n "$(echo "$excessive_members"|grep '<\|>')" ] ; then \
       if [ -n "$(echo "$excessive_members"|grep '<')" ] ; then [ "$vdisk_alarm" != 1 ] && echo errors: && vdisk_alarm=1;
-          REDn "Excessive members:"    ;
+          redn "Excessive members:"    ;
        for node_bad in $(echo "$excessive_members" |grep '<'|sed 's/<//g'|sort -u) ;
            do  echo " $node_bad[$(echo "$NODES_TABLE"|grep -- "$node_bad"| awk '{print $3}'|sort -u )]"|sed 's/\[\]/\[no info\]/g' ; done; fi;
       if [ -n "$(echo "$excessive_members"|grep '>')" ] ; then [ "$vdisk_alarm" != 1 ] && echo errors: && vdisk_alarm=1;
-          REDn "Excessive membership:" ;
+          redn "Excessive membership:" ;
        for node_bad in $(echo "$excessive_members" |grep '>'|sed 's/>//g'|sort -u) ;
            do  echo " $node_bad[$(echo "$NODES_TABLE"|grep -- "$node_bad"| awk '{print $3}'|sort -u )]"|sed 's/\[\]/\[no info\]/g'; done; fi;
 
@@ -1403,7 +1403,7 @@ fi;
 
   [ -n "$(echo "$group_all_alarm"|grep -v '^$')" ] && red '**mismatch groupmon keys:**' && advance_print_fun "$(echo "$group_all_alarm"|sed 1d)" '2' ;
   [ -n "$NoConnectStVm_alarm" ] && red '**Can not connect to storage vm(s):**' && advance_print_fun "$(echo "$NoConnectStVm"|grep -v '^$')" '2';
-  [ -n "$ping_report" ] && REDn '**Ping Issues:**' && yellow "\t\t""$( if [ "$DEEPLY" = 1 ] ;                                                            # report ping issues
+  [ -n "$ping_report" ] && redn '**Ping Issues:**' && yellow "\t\t""$( if [ "$DEEPLY" = 1 ] ;                                                            # report ping issues
        then echo ' --Deeply mode! [ping by -c 1000 -i 0.001 -w 5]';
        else echo '<-- ping by 1 packet with deadline 1.5 sec. (for check more deeply will Use -D key)'; fi;)" && echo && echo && echo '```' && \
        for ping_i in `echo "$ping_report" |grep -v '^$' |sort|awk '{print $2}'|uniq` ;
@@ -1411,7 +1411,7 @@ fi;
         $(ip_sort_fun "$(echo "$ping_report" |sort -u|grep  ")[[:space:]]$ping_i" | awk '{print $5}')" '3') "$(echo "$ping_report"|sort -u|grep -- ")[[:space:]]$ping_i"|awk '{print $6, $7, $8}'|uniq)" ; echo ;
        done  &&  echo && echo '```' ;                                                                                                                   # report ping issues
 
-  [ -n "$locks_file_alarm" ] && REDn '**Found out harmful lock(s) file(s)**' && yellow "\t\t <-- $(echo "$list_by_George" |grep -A 1 'reports locks')" && \
+  [ -n "$locks_file_alarm" ] && redn '**Found out harmful lock(s) file(s)**' && yellow "\t\t <-- $(echo "$list_by_George" |grep -A 1 'reports locks')" && \
                                 echo && advance_print_fun "$(echo "$locks_file_alarm"|grep -v '^$')" '2' ;                                              # locls files
   [ -n "$hv_alarm1" ]   && redb '**'"$(echo "$hv_alarm1"|sed 's/ Large/\nLarge/g'|grep -v '^$')"'**' && echo;                                           # report timeout is on hvs
   [ -n "$xfs_alarm" ] && red '**XFS issues:**' "\t\t" '<--' "${knowdb}42226897-Repair-XFS-filesystem-on-Storage-nodes" && advance_print_fun "$(echo "$xfs_alarm"| sed 's/XFS/\nXFS/g'|grep -v '^$')" '2';
@@ -1424,7 +1424,7 @@ fi;
     then [ -n "$group_report" ] &&  yellow
      '**Incorrect amount of groupmon processes:**' "\t\t" '<--' "$(echo "$list_by_George" |grep 'Incorrect-amount')"  && echo && advance_print_fun "$group_report" '2';
     else [ -n "$isd_report" ]  &&  red '**No isd process(es):**'    && advance_print_fun "$isd_report" '2' ;
-         [ -n "$hv_cron_report" ] && REDn '**Cron issues:**'  && yellow  "$(echo -e "\t\t")"'<-- crond should running with correct values in crontab for IS(isd)' && echo && advance_print_fun "$hv_cron_report" '2';
+         [ -n "$hv_cron_report" ] && redn '**Cron issues:**'  && yellow  "$(echo -e "\t\t")"'<-- crond should running with correct values in crontab for IS(isd)' && echo && advance_print_fun "$hv_cron_report" '2';
          [ -n "$dropbear_alarm" ] &&  yellow '**No ssh-server(s):**' && echo && advance_print_fun "$dropbear_alarm" '2' ;
          [ -n "$group_report" ] &&  yellow '**Groupmon|redis processes on isd IS:**'  && echo && advance_print_fun "$group_report" '2' ;
          makespaceNode='"nodemakespace uuid=id" via CLI or';
