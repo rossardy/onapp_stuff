@@ -118,6 +118,12 @@ function yellow {
   printf "${YELLOW}${1}${NORMAL}"
 }
 
+
+function library_ssh_color_funs {
+function RED() { echo  '\033[0;31m\033[1m'"$@"'\033[0m'; } ; function REDn() { echo -n '\033[0;31m\033[1m'"$@"'\033[0m'; } ;              # standart color_fun ; for colorise but on HV when check stvms
+function YELLOW() { echo -n '\033[0;33m\033[1m'"$@"'\033[0m'; };                                                                          # standart color_fun ; then all info will echo -e on CP.
+}
+
 ### Standard table outputs
 
 divider===============================
