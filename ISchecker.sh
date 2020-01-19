@@ -1163,7 +1163,7 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
             [ -n "$vdisk_storage" ] && echo -n 'storage,';
             [ -n "$vdisk_xml_data" ] && echo -n "xml[$vdisk_xml_syncstatus]";
             echo -n ')' ; else yellow ' no_files' ; fi |sed 's/,)/)/g' ;
-      else REDn ' no_connect_to_controller' ; fi;
+      else REDn ' no_connect_to_controller'; echo "ssh $ssh_opt -q root@$node_ip_addr" ; fi;
 
           [ "$state" != 'ACTIVE' ]  && yellow " $state" ;
           [ -z  "$vdisk_socket" -a  -n "$(echo $rspamd_pids|grep [0-9])" ] && REDn " no_socket!"
