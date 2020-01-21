@@ -3,7 +3,7 @@
 
 # Copyright 2019, Rostyslav Yatsyshyn <rossardy@gmail.com>
 
-# This program is free software: you can redistribute it and/or modify
+# This program is free software: you can redistributef it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -226,7 +226,7 @@ dbpass=$(cat $dbph |grep passw|awk '{print $2}'|head -1 |sed -e "s|^'||g; s|'$||
 dbname=$(cat $dbph |grep database|awk '{print $2}'|head -1)
 dbhost=$(cat $dbph |grep 'host:' |awk '{print $2}'|head -1)
 dbuser=$(cat $dbph |grep 'username:' |awk '{print $2}'|head -1)
-dbprefix='ip_address, host_id, mtu, hypervisor_group_id, label, backup '
+dbprefix='select ip_address, host_id, mtu, hypervisor_group_id, label, backup '
 dborder='ORDER BY hypervisor_group_id';
 
 ### Recognise onapp versions
@@ -495,11 +495,11 @@ zoneIP=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select ip_add
 FLAGS+="only";flag='disks'; fi;
 [ -n "$zoneIP" -a -z "$(echo $FLAGS|grep only)" ] && zone=$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select hypervisor_group_id from hypervisors where ip_address='$zoneIP' and mac <> '' and host_id is not NULL" | sed '1d') && \
 checkopts zoneIP;
-[ "$flag" = 'disks' ] && dbhv_all="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$dbprefix" "$dbselect" | sed '1d')";
+[ "$flag" = 'disks' ] && dbhv_all="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$dbprefix $dbselect" | sed '1d')";
 
 if [ -z "$zone" ] ;
-    then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and online=1  $dborder");
-    else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and online=1 and hypervisor_group_id=$zone and online=1 $dborder"); # DB select for zone modes
+    then DBSELECT=$(echo "$dbprefix $dbselect and online=1  $dborder");
+    else DBSELECT=$(echo "$dbprefix $dbselect and online=1 and hypervisor_group_id=$zone and online=1 $dborder"); # DB select for zone modes
 fi;
 
 if [[ $FLAGS =~ 'vm_mode' ]] ;                                                                                                           # print  info of vm/vdisks from DB
@@ -511,10 +511,8 @@ mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "select d.id, d.identif
 fi;
 
 [[ $FLAGS =~ 'only' ]] && if [ "$flag" != 'disks' ] ;
-#then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect and ip_address='$zoneIP'") ;
-#else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup $dbselect ip_address='$zoneIP' ") ;
-then DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup from hypervisors where online=1 and mac  <> '' and host_id is not NULL and ip_address='$zoneIP' and host_id is not NULL or backup=1 and mac <> '' and online=1 and host_id is not NULL") ;
-else DBSELECT=$(echo "select ip_address, host_id, mtu, hypervisor_group_id, label, backup from hypervisors where online=1 and mac  <> '' and ip_address='$zoneIP' ") ;
+then DBSELECT=$(echo "$dbprefix $dbselect and ip_address='$zoneIP' and host_id is not NULL or backup=1 and mac <> '' and online=1 and host_id is not NULL") ;
+else DBSELECT=$(echo "$dbprefix $dbselect and ip_address='$zoneIP' ") ;
 fi
 
 dbhv="$(mysql -u "$dbuser" -p"$dbpass" "$dbname" -h "$dbhost" -e "$DBSELECT" | sed '1d')";                                                              # data of hvs
@@ -531,6 +529,27 @@ if [ "$HVslist" = list ] ; then printf "%s\n"   "${RED}Cloudboot HVs with IS ena
      exit 0;
 fi;
 
+function group_sort_fun() {
+  # input:  values of groupmon processe from HVs and stvms ()
+  # output: group_all_alarm - if mismatch - report in values and sort by zone / by HV /and sort ip of stvms
+for i in `echo "$1"|awk '{print $1}'|sort -u| sed 's/hv_zone=//g'`;
+    do  group_c="$(echo "$1"|grep -- "hv_zone=$i "| grep -o -P '(?<=groupmon ).*(?=$)'|sort -u)";
+        [ "$(echo "$group_c"|wc -l)" -gt 1 ] && \
+group_all_alarm="$group_all_alarm
+$(echo)
+$(echo 'In Hvs zone = '$i)" && \
+        for  b in `bash -c "echo {1..$(echo "$group_c"|wc -l)}"`;  do \
+group_key=$(echo $(echo "$group_c"|sed -n {"$b"p}|sed 's/224.3.28.[0-9]\+,\?//g') $(ip_sort_fun  "$(echo -n "$group_c"|sed -n {"$b"p}|grep -o '224.3.28.[0-9]\+')" 4))
+group_all_alarm="$group_all_alarm
+$(echo "--group settings: 'groupmon $group_key' For stvm:")";
+             group_hv=$(echo "$1" | grep -- "hv_zone=$i "|grep -- "groupmon $(echo "$group_c"|sed -n {"$b"p})"|awk '{print $3}'|sort -u) ;
+             for c in `echo "$group_hv"`; do \
+group_all_alarm="$group_all_alarm
+ $(echo -n "$c"': ' $(ip_sort_fun "$(echo "$1" | grep -- "hv_zone=$i "|grep -- "$c" |grep -- "groupmon $(echo "$group_c"|sed -n {"$b"p})"|awk '{print $4}'|tr -d 'stvm:()')" '4'); echo;)";
+              done;
+        done;
+done;
+}
 
 function report_nodes_issues() {
 # fun for report readble nodes issues.
@@ -1107,7 +1126,9 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
     else  vdisk_membership_info="$(echo "$vdisk_info"| sed 's/ /\n/g' |  grep 'members[h=]'|grep -v info|sed 's/=/ /g;s/,/ /g')"
           vdisk_memberinfo=$(echo "$vdisk_info"| sed 's/ /\n/g' |grep 'member' |sed -e "s|\(u'[0-9]\+'\)|\n\1|g"|grep -v memberinfo|
                     sed "s/\(u'\|'\)//g;s/,/ /g;s/\(nodestatus:[0-9]\|snap_limit:[0-9]\+\|membership_gen_count:[0-9]\+\|frontend:\|port:[0-9]\+\)//g;s/:{/ /g;s/}//g;s/=/ /g;;s/[ ]\+/ /g"|
-                    grep -v members|grep -v '[0-9]\+:[0-9]'| sed 's/\(\[10\.200.\+\) \(10\.200.\+\]\)/\1,\2/g' |awk '{print $1, $2, $3, $5, $4 }' |sort -k 4);         # example: 4291780412 status:1  [10.200.3.254]  st_mem:0  seqno:2092032
+                    grep -v members|grep -v '[0-9]\+:[0-9]'| sed 's/\(\[10\.200.\+\) \(10\.200.\+\]\)/\1,\2/g' |awk '{print $1, $2, $6, $3, $5, $4 }' |sort -k 4);         # example: 4291780412 status:1  [10.200.3.254]  st_mem:0  seqno:2092032
+
+       # --> here needs to add checking if dmcache enabled using vdisk_memberinfo
 
        vdisk_nodes=$(echo "$NODES_TABLE" | grep -e  $(echo "$vdisk_membership_info" |grep 'membership' |sed 's/membership //g;s/ / -e /g') );  # table of vdisks's nodes (cuted from NODES_TABLE)
 
@@ -1153,8 +1174,9 @@ vdisk_resynchstatus="$(echo "$all_info_of_vdisks"|grep ' resynchstatus '|grep --
           vdisk_storage=$(ssh $ssh_opt root@$node_ip_addr "ls /DB/NODE-$node/storage/$vdisk/storage 2>/dev/null") ;                                    # check storage file
           vdisk_xml_data=$(ssh $ssh_opt root@$node_ip_addr cat /DB/NODE-$node/vdisks/$vdisk.xml 2>/dev/null);                                          # check vdisk xml file and save data.
           vdisk_xml_syncstatus=$(echo $vdisk_xml_data|sed 's/>/>\n/g; s/</\n</g'| sed -n '/<syncstatus>/,/<\/syncstatus>/p'|sed '1d;$d'|grep -o '[0-9]\+')
-          echo -n "$node"'-'$node_ip_addr;  echo $ssh_opt;                                                                                                            # print node|ip_of|node and another info
+          echo -n "$node"'-'$node_ip_addr;                                                                                                              # print node|ip_of|node and another info
           echo -n ' '"$(echo "$vdisk_memberinfo"|grep -- "$node"|awk '{$1="";print}')";
+
       if ssh $ssh_opt -q root@$node_ip_addr exit  ; then \
           if [ -n "$(echo $rspamd_pids|grep [0-9])" ] ; then echo -n " ($rspamd_pids)" ; else echo -n ' (no_rspamd)';  fi;                            # print rspamd pids processes which running on taget stvm
           if [ -n "$vdisk_socket" -o -n "$vdisk_storage" -o -n "$vdisk_xml_data" ] ; then \
@@ -1251,7 +1273,7 @@ function disks_check_main_fun() {
 # function prepare list of VDISKS then transmit all output of disks_check_get_info_fun to DISKS_INFO var and print its.
 # input 1=$VDISKS ; 2=count_of_vdisks
 # output: calculated and readble data
-DISKS_INFO=$(ssh $ssh_opt root@$hv "$(typeset -f disks_check_get_info_fun clean_up disk_get_info library_ssh_color_funs get_all_vdisks_info_fun) ; disks_check_get_info_fun \"$1\" $ISD $SSH_TEL_FLAG \"$dbhv_all\" \"$ssh_opt\"" )
+DISKS_INFO=$(ssh $ssh_opt root@$hv "$(typeset -f disks_check_get_info_fun clean_up disk_get_info library_ssh_color_funs get_all_vdisks_info_fun) ;  disks_check_get_info_fun \"$1\" $ISD $SSH_TEL_FLAG \"$dbhv_all\" \"$ssh_opt\"" )
 echo;
 echo -e "$DISKS_INFO" ;
 }
