@@ -1033,7 +1033,7 @@ hv="$1" ; ping_host_range="$2" ;hv_zone_id="$3" ; Hid="$4"; DBHV="$5" ; hv_backu
              echo "$i1" | grep bond  1>/dev/null  && \
                 all_bond=$(echo -e $hv"\t"zone_id=$hv_zone_id"\t"$bond_mode);                                                    # -$all_bond for report
 
-             centos_ver=$(cat /etc/redhat-release | awk '{ print$4 }' | cut -b 1)
+             centos_ver=$(cat /etc/redhat-release | sed  's/[^0-9]//g' | cut -b 1) ;
              for b in `echo "$i"`;
                   do net_ifcon=$(ifconfig $b)
                      if  [[ $centos_ver -eq 6 ]]
@@ -1042,6 +1042,7 @@ hv="$1" ; ping_host_range="$2" ;hv_zone_id="$3" ; Hid="$4"; DBHV="$5" ; hv_backu
                          else net_mtu=$(echo "$net_ifcon" |grep mtu|sed 's/ /\n/g'|grep mtu -A1 | sed -n 2p);
                               [ "$b" == onappstoresan ] && net_mtu_san=$(echo $net_mtu);
                      fi
+                     echo  $net_mtu
                      net_errors=$(echo "$net_ifcon" |grep error|grep -v 'errors:0 dropped:0 overruns:0'|sed 's/ packets/_packets/g; s/ /\n/g'|grep -vE ':0|fr');            #
                      net_nolink=$(ethtool  $(echo $b|sed 's/\.[0-9]\+$//g')|grep 'detected: no');
                      printf '%-8b\t' $b  $net_mtu $net_errors;
@@ -1077,9 +1078,6 @@ clean_up 'ping_report all_bond net_allmtu multicast_snoop_err' 'B|E' 'empties' ;
 ip_addr=$(ifconfig mgt|grep Mask|awk {'print $2'}|sed 's/addr://')
 mask=$(ifconfig mgt|grep Mask|awk {'print $4'}|sed 's/Mask://')
 default_gw=$(ip r |grep default| sed 's/[[:alpha:]]//g')
-
-#BOLD='\033[1m' ; RED='\033[0;31m' ; yellow='\033[0;33m' ; NORMAL='\033[0m' ;
-#function RED    { echo -e ${RED}${BOLD}$@${NORMAL}; }
 
 #####Calculation of mgt address###########
 IFS=. read -r i1 i2 i3 i4 <<< "$ip_addr"
@@ -1387,9 +1385,6 @@ for node_zone in `echo "$nodes_statistic"|awk '{print $3}'|sort -u` ;
    do if [ "$(echo "$nodes_statistic"|grep -- $node_zone| awk '{print $2}'|sort -u|wc -l)" -gt '1' ] ;  then nodes_state_report="$nodes_state_report
 $(report_nodes_issues "$nodes_statistic" '1')" ; break ; fi ; done;                                               # if different amount of active nodes in hv_zone -> report its in nodes_state_report
 clean_up 'report_nodes_issues' 'empties';
-echo  $is_ver
-#echo  $is_con_ver
-#echo  $is_ver_short
 is_ver_alarm=$(echo "$is_ver"|awk '{print $5}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                                  # alarm =  IS ver mismatch all hvs
 is_con_ver_alarm=$(echo "$is_con_ver"|awk '{print $5}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)
 is_ver_short_alarm=$(echo "$is_ver_short"|awk '{print $2}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                                  # alarm =  IS ver mismatch all hvs                                                      # alarm =  IS ver mismatch all hvs
