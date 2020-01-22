@@ -431,7 +431,6 @@ done
  [ "$flag" = 'disks' ] && [ -z "$(echo $@|grep 'o [1-9]')" ] && echo "Please specify HV by -o option"   && help_fun 2 ;
 [[ $FLAGS =~ 'vm_mode' ]] && [ -z "$(echo $VM_identifier|grep -- '[a-z0-9]\{14\}')" ] && echo "Please specify identifier of the VM --vm='<identifier>' (14 symbols)"$'\n'   && help_fun 2 ;
 
-# echo $FLAGS ; echo $VM_identifier
 ##### Onapp store versions
 [ "$(echo "$onapp_store_ver"|wc -l)" -gt 1 ] && echo && RED 'MESS in onapp-store packeges:' && echo "$onapp_store_ver" && echo && onapp_store_ver_report=1;
 verstore="$(echo "$onapp_store_ver"|sort -u|sed -n {1p}|cut -d '-' -f 4) " ;                                                                           # take onappstore-version
@@ -439,8 +438,7 @@ echo "$onapp_store_ver"|sort -u|sed -n {1p}|grep -e '3.3.0-19' -e '3.3.0-22' -e 
 [ "$ISD" == 1 ] && SSH_TEL_FLAG='ssh';                                                                                           # script works by ssh to stvm only for onapp store versions which based on ISD
 onapp_store_ver_dig=$(echo "$onapp_store_ver" |sed 's/install-/\n/g;s/.noa/\n/g'|grep [0-9] |head -n 1)                                                 # source rpm of onapp-store
 if [ -n "$onapp_store_ver" ] ;
- then if [ "$onapp_store_ver_report" = 1 ] ; then echo 'ISchecker will use onapp-store ver [ '$verstore'] for check cloud.' ; yellow 'NOTE: Can be issues with checking cloud due isd/groupmon differences'; echo;
-      else echo onapp-store ver: \[ $onapp_store_ver_dig \] ; fi;
+ then if [ "$onapp_store_ver_report" = 1 ] ; then yellow 'NOTE: Can be issues with checking cloud due isd/groupmon differences'; echo; fi;
       cloud_boot_enabled="$(cat /onapp/interface/config/on_app.yml  2>/dev/null |grep '^cloud_boot_enabled:'|cut -d ' ' -f 2)";
       [ "$cloud_boot_enabled" != 'true' ] && yellow 'Cloudboot is not enabled. Status='"$cloud_boot_enabled"  && echo && exit 3;
       is_storage_enabled=$(cat /onapp/interface/config/on_app.yml  2>/dev/null|grep '^storage_enabled'|cut -d ' ' -f 2);
@@ -529,6 +527,35 @@ if [ "$HVslist" = list ] ; then printf "%s\n"   "${RED}Cloudboot HVs with IS ena
      exit 0;
 fi;
 
+################## sort functions (sort_fun.sh)
+
+function rpm_sort_fun() {
+# input:  list of soruce rpm; mode;
+# output: sort list of s rpm by ips of HVs  + add onapp-store version from tips_s (all rpm source )
+if [ "$3" != 'CP_ALARM' ] ; then \
+for i in `echo "$1"| awk '{print $2}'|sort -u` ;
+do   echo -n Onapp Store version: $onapp_store_ver_dig '  |  On HV(s): ' $i ' ';
+ip_sort_fun "$(echo "$1"|grep "$i"|awk '{print $1}')" '4';
+echo ;
+done;
+else i=$(echo $is_ver_short|awk '{print $2}'|uniq|grep -vE "^$")
+echo -n Onapp Store version: $onapp_store_ver_dig '  |  On HV(s) and Bs(s): ' $i ' ';
+fi ;
+echo -n Onapp Store version: $onapp_store_ver_dig '  |  On CP: ' $(echo $onapp_cp_ver | sed 's/^[a-z]*-[a-z]*-//g') ; unset i;
+}
+
+function mtu_sort_fun() {
+  # function sort mtu alarm data. per hvs zone ; per MTU ; and sort interfaces of one HV
+  for mtu_hv_zone in `echo "$1" |grep  'in hv_zone'|grep -Eo '[0-9]+'`;
+   do echo In hvs zone: $mtu_hv_zone;
+    for mtu_mtu in `echo "$1" |grep -E -- "hv_zone=[$mtu_hv_zone/BS]"|sort -u|grep -Eo 'MTU:[0-9]+'|grep -oE [0-9]+|sort -u` ;
+     do echo --MTU:$mtu_mtu;for mtu_hv_hv in `echo "$1" |grep -E -- "hv_zone=[$mtu_hv_zone/BS]"|grep -- "MTU:$mtu_mtu" | awk '{print $1}'|sort -u` ;
+                    do echo --- $mtu_hv_hv Interfaces: \($(echo "$1"  |grep -E -- "hv_zone=[$mtu_hv_zone/BS]"|grep -- "MTU:$mtu_mtu" | grep -- "$mtu_hv_hv" |awk '{print $3}'|sort -u)\);
+                done
+     done ;
+   done
+}
+
 function group_sort_fun() {
   # input:  values of groupmon processe from HVs and stvms ()
   # output: group_all_alarm - if mismatch - report in values and sort by zone / by HV /and sort ip of stvms
@@ -613,8 +640,9 @@ then \
 
     [ -e /tmp/pinglock ]      && [ $(expr $(date +%s) - $(stat -c%Y /tmp/pinglock)) -ge 180 ]      && echo LOCK-PG pinglock;                     # take lock files which exist more then 180sec
     [ -e /tmp/freeinuselock ] && [ $(expr $(date +%s) - $(stat -c%Y /tmp/freeinuselock)) -ge 180 ] && echo LOCK-PG freeinuselock;
-    echo is_ver     "$(cat /onappstore/package-version.txt   |grep 'Source RPM'|sed 's/Source RPM/\nSource RPM/g'|grep Source)";                 # take is_ver for each HV
-    echo is_con_ver "$(cat /onappstore/controllerversion.txt |grep 'Source RPM'|sed 's/Source RPM/\nSource RPM/g'|grep Source)";                 # take is_ver for each HV
+    echo is_ver        "$(cat /onappstore/package-version.txt   |grep 'Source RPM'|sed 's/Source RPM/\nSource RPM/g'|grep Source)";                 # take is_ver for each HV
+    echo is_con_ver    "$(cat /onappstore/controllerversion.txt |grep 'Source RPM'|sed 's/Source RPM/\nSource RPM/g'|grep Source)";                 # take is_ver for each HV
+    echo is_ver_short  "$(cat /onapp/onapp-store-install.version)";
     if [ -d /tmp/NBDdevs/freedevs/ ] ; then echo free_devs "$(ls /tmp/NBDdevs/freedevs/|wc -l 2>/dev/null)" ;  else echo free_devs NODIR; fi;    # amount of free nbd devs
     if [ "$ISD" = 1 ] ;
       then echo hv_lockssort $(ls /tmp/|grep '.sort$') ;
@@ -647,9 +675,10 @@ function status_nodes_hv_fun() {
   [ -n "$hv_locks" ] && hv_alarm='RED' && locks_file_alarm=$(echo -e "$locks_file_alarm""\n"'HV:('$hv') -- '$hv_locks) ;
   [ "$ISD" = 1 ] && hv_lockssort=$(echo "$hv_stats"| grep 'hv_lockssort'|sed 's/hv_lockssort//g');
   [ -n "$hv_lockssort" ] && hv_alarm='RED' && locks_file_alarm=$(echo -e "$locks_file_alarm""\n"'HV:('$hv') -- '$hv_lockssort) ;  # set alarm and report lock issues
-  stvm=$(echo "$hv_stats"|grep 'STVM NUMBER:'|grep -Po '[0-9]+') ; [ -z "$stvm" ] && stvm=0;                                      # take amount of storage controllers
-  is_ver=$(echo -e "$is_ver""\n"$hv "$(echo "$hv_stats"|grep is_ver|sed 's/is_ver//g')");                                         # echo $is_ver; # get is ver
-  is_con_ver=$(echo -e "$is_con_ver""\n"$hv "$(echo "$hv_stats"|grep is_con_ver|sed 's/is_con_ver//g')");                         # echo $is_con_ver;
+  stvm=$(echo "$hv_stats"|grep 'STVM NUMBER:'|grep -Po '[0-9]+') ; [ -z "$stvm" ] && stvm=0;
+  is_ver=$(echo -e "$is_ver""\n"$hv "$(echo "$hv_stats"|grep 'is_ver '|sed 's/is_ver//g')");                                      # echo $is_ver; # get is ver
+  is_con_ver=$(echo -e "$is_con_ver""\n"$hv "$(echo "$hv_stats"|grep is_con_ver|sed 's/is_con_ver//g')");                         # echo $is_con_ver;                                        # take amount of storage controllers
+  is_ver_short=$(echo -e "$is_ver_short""\n"$hv "$(echo "$hv_stats"|grep is_ver_short|sed 's/is_ver_short//g')");                 # echo $is_ver_short; # get is ver
   hv_active=$(echo "$hv_stats"  |grep 'status: ACTIVE' |uniq -c | awk  '{print $3,$1}'|sed 's/ /:/');                             # active nodes
   hv_partial=$(echo "$hv_stats" |grep PARTIAL          |uniq -c | awk  '{print $3,$1}'|sed 's/ /:/');                             # partial nodes
   hv_delay=$(echo "$hv_stats"   |grep DELAY            |uniq -c | awk  '{print $3,$1}'|sed 's/ /:/');                             # delay ping nodes
@@ -1358,8 +1387,12 @@ for node_zone in `echo "$nodes_statistic"|awk '{print $3}'|sort -u` ;
    do if [ "$(echo "$nodes_statistic"|grep -- $node_zone| awk '{print $2}'|sort -u|wc -l)" -gt '1' ] ;  then nodes_state_report="$nodes_state_report
 $(report_nodes_issues "$nodes_statistic" '1')" ; break ; fi ; done;                                               # if different amount of active nodes in hv_zone -> report its in nodes_state_report
 clean_up 'report_nodes_issues' 'empties';
-is_ver_alarm=$(echo "$is_ver"|awk '{print $4}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                                  # alarm =  IS ver mismatch all hvs
-is_con_ver_alarm=$(echo "$is_con_ver"|awk '{print $4}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                          # alarm =  IS ver mismatch all hvs
+echo  $is_ver
+#echo  $is_con_ver
+#echo  $is_ver_short
+is_ver_alarm=$(echo "$is_ver"|awk '{print $5}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                                  # alarm =  IS ver mismatch all hvs
+is_con_ver_alarm=$(echo "$is_con_ver"|awk '{print $5}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)
+is_ver_short_alarm=$(echo "$is_ver_short"|awk '{print $2}'|uniq|grep -vE "^$"|grep [a-z0-9]|wc -l)                                                                  # alarm =  IS ver mismatch all hvs                                                      # alarm =  IS ver mismatch all hvs
 
 for bzone in `echo "$all_bond"|cut -f 2|sort -u` ;                                                                                                    # cycle for each HV zone - check bond mismatch
      do \
@@ -1394,10 +1427,9 @@ do [ -n "$(echo "${!report_args}"|grep -v '^$')" ] && report_alarm=1 ; done ;   
 for report_args in bond_report_alarm mtu_report_alarm onapp_store_ver_report ;
 do [ "${!report_args}" = 1 ] && report_alarm=1   ; done ;                                                                                                # if data == 1 - report
 
-  [ "$is_ver_alarm" -gt 1 -o "$is_con_ver_alarm" -gt 1 ]       && report_alarm=1 ;                                                                       # if data gt 1 - report
+  [ "$is_ver_alarm" -gt 1 -o "$is_con_ver_alarm" -gt 1 -o "$is_ver_short_alarm" -gt 1 ]  && report_alarm=1 ;                                                                       # if data gt 1 - report
 
-  if [ -z "$onapp_store_rpm" ] ; then echo ; yellow 'Note:' ; echo " ISchecker doesn't have enough info. No-info: package-version of current IS onapp-version" ; echo ;
-   else [ -n "$is_ver" ] && [ "$(echo "$is_ver"|awk '{print $4}'|uniq|grep -vE "^$")" != "$onapp_store_rpm" ] && report_alarm=1 ; fi;                              # mismatch onapp ver bw hv with CP
+  [ -n "$is_ver_short" ] && [ "$(echo "$is_ver_short"|awk '{print $2}'|uniq|grep -vE "^$")" != "$onapp_store_ver_dig" ] && report_alarm=1 ;                             # mismatch onapp ver bw hv with CP
 
   [ "$report_alarm" == 1 ] && echo && yellow '### ISchecker - report issues:' && echo && echo ;
 
@@ -1408,19 +1440,18 @@ do [ "${!report_args}" = 1 ] && report_alarm=1   ; done ;                       
   [ "$mtu_report_alarm" == 1 ] && red '**MTU mismatch:**' && advance_print_fun "$(mtu_sort_fun "$mtu_report")" '2';                                       # Mtu mismatch report -- mtu_sort_fun "$mtu_report"
 
   [ "$onapp_store_ver_report" = 1 ] && red '**Mess in onapp-store packeges on CP**' && advance_print_fun "$onapp_store_ver" '2';
-
-if [ "$is_ver_alarm" -gt 1 -a "$is_con_ver_alarm" -gt 1 ] ; then \
-  [ "$is_ver_alarm" == 1 -a "$is_con_ver_alarm" == 1 ] &&   [ "$(echo "$is_ver"|awk '{print $4}'|uniq|grep -vE "^$")" != "$onapp_store_rpm" ] && red '**Mismatch onapp-store version:**' && \
-    advance_print_fun "$(rpm_sort_fun "$is_ver" "CP_ALARM"|grep -vE "^$"|sort -k 4 -r)" '2' ;                                                            # between CP and all HVs which checking now.
+if [ "$is_ver_alarm" -gt 1 -a "$is_con_ver_alarm" -gt 1  ] ; then \
+  [ "$is_ver_alarm" == 1 -a "$is_con_ver_alarm" == 1  ] &&  [ "$(echo "$is_ver_short"|awk '{print $2}'|uniq|grep -vE "^$" | sed 's/-[0-9]*$//g')" != "$(echo $onapp_cp_ver | sed 's/-[0-9]*$//g' | sed 's/^[a-z]*-[a-z]*-//g')" ] && red '**Mismatch onapp-store version:**' && \
+    advance_print_fun "$(rpm_sort_fun "$is_ver_short" "CP_ALARM"|grep -vE "^$"|sort -k 4 -r)" '2' ;                                                            # between CP and all HVs which checking now.
     red "**found out mismatch IS versions in 'controllerversion|package-version'**";
-            advance_print_fun "$(rpm_sort_fun "$is_con_ver"|grep -vE "^$"|sort -k 4 -r)" '2' ;
+            advance_print_fun "$(rpm_sort_fun "$is_ver_short"|grep -vE "^$"|sort -k 4 -r)" '2' ;
              else   if [ "$is_ver_alarm" -gt 1 ] ;                                                                                                       # Is ver mismatch all hvs report
        then red "**found out mismatch IS versions in 'cat /onappstore/package-version.txt'**   <-- package-version";
-            advance_print_fun "$(rpm_sort_fun "$is_ver"|grep -vE "^$"|sort -k 4 -r)" '2' ;   fi;
+            advance_print_fun "$(rpm_sort_fun "$is_ver_short"|grep -vE "^$"|sort -k 4 -r)" '2' ;   fi;
 
   if [ "$is_con_ver_alarm" -gt 1 ] ;                                                                                                                     # Is ver mismatch all hvs report
        then red "**found out mismatch IS versions in 'cat /onappstore/controllerversion.txt'** <-- controllerversion";
-            advance_print_fun "$(rpm_sort_fun "$is_con_ver"|grep -vE "^$"|sort -k 4 -r)" '2' ;   fi;
+            advance_print_fun "$(rpm_sort_fun "$is_ver_short"|grep -vE "^$"|sort -k 4 -r)" '2' ;   fi;
 fi;
 
   [ -n "$(echo "$group_all_alarm"|grep -v '^$')" ] && red '**mismatch groupmon keys:**' && advance_print_fun "$(echo "$group_all_alarm"|sed 1d)" '2' ;
@@ -1441,7 +1472,7 @@ fi;
   [ -n "$multicast_snoop_err" ] && red '**Enabled multicast_snooping for SAN bridge**' && advance_print_fun "$(echo "$multicast_snoop_err"|grep -v '^$')" '2' ;  # report mulricast_snoop enable
 
   if [ -n "$api_report" ]  ; then  yellow '**storage API issues:**' ;  [ -n "$(echo "$api_report"|grep 'API-call')" ] && yellow "\t\t API-call failed means 'onappstore nodelocalinfo uuid=' return failure" ;
-                                   echo "  <-- please restart storageAPI inside storage vm via telnet"; advance_print_fun "$api_report" '2';  fi;
+                                   echo "  <-6- please restart storageAPI inside storage vm via telnet"; advance_print_fun "$api_report" '2';  fi;
   if [ "$ISD" = 0 ] ;
     then [ -n "$group_report" ] &&  yellow
      '**Incorrect amount of groupmon processes:**' "\t\t" '<--' "$(echo "$list_by_George" |grep 'Incorrect-amount')"  && echo && advance_print_fun "$group_report" '2';
